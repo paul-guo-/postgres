@@ -138,6 +138,9 @@ typedef struct TM_FailureData
 /* Follow update chain and lock latest version of tuple */
 #define TUPLE_LOCK_FLAG_FIND_LAST_VERSION		(1 << 1)
 
+/* Maximum tuple number and total tuple size in on multi insert batch. */
+#define MAX_MULTI_INSERT_TUPLE_NUM		1000
+#define MAX_MULTI_INSERT_TUPLE_SIZES	65535
 
 /* Typedef for callback function for table_index_build_scan */
 typedef void (*IndexBuildCallback) (Relation index,

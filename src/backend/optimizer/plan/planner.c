@@ -6951,11 +6951,6 @@ can_partial_agg(PlannerInfo *root, const AggClauseCosts *agg_costs)
 		 */
 		return false;
 	}
-	else if (parse->groupingSets)
-	{
-		/* We don't know how to do grouping sets in parallel. */
-		return false;
-	}
 	else if (agg_costs->hasNonPartial || agg_costs->hasNonSerial)
 	{
 		/* Insufficient support for partial mode. */

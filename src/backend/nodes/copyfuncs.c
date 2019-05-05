@@ -1473,6 +1473,17 @@ _copyGroupingFunc(const GroupingFunc *from)
 }
 
 /*
+ * _copyGroupingSetId
+ */
+static GroupingSetId *
+_copyGroupingSetId(const GroupingSetId *from)
+{
+	GroupingSetId *newnode = makeNode(GroupingSetId);
+
+	return newnode;
+}
+
+/*
  * _copyWindowFunc
  */
 static WindowFunc *
@@ -4976,6 +4987,9 @@ copyObjectImpl(const void *from)
 			break;
 		case T_GroupingFunc:
 			retval = _copyGroupingFunc(from);
+			break;
+		case T_GroupingSetId:
+			retval = _copyGroupingSetId(from);
 			break;
 		case T_WindowFunc:
 			retval = _copyWindowFunc(from);

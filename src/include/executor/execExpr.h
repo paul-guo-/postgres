@@ -216,6 +216,7 @@ typedef enum ExprEvalOp
 	EEOP_XMLEXPR,
 	EEOP_AGGREF,
 	EEOP_GROUPING_FUNC,
+	EEOP_GROUPINGSET_ID,
 	EEOP_WINDOW_FUNC,
 	EEOP_SUBPLAN,
 	EEOP_ALTERNATIVE_SUBPLAN,
@@ -654,6 +655,7 @@ typedef struct ExprEvalStep
 			int			transno;
 			int			setoff;
 		}			agg_trans;
+
 	}			d;
 } ExprEvalStep;
 

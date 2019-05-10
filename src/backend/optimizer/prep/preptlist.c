@@ -55,6 +55,7 @@
 
 static List *expand_targetlist(List *tlist, int command_type,
 				  Index result_relation, Relation rel);
+static List *add_gsetid_tlist(List *tlist);
 
 
 /*
@@ -233,6 +234,8 @@ preprocess_targetlist(PlannerInfo *root)
 							  CMD_UPDATE,
 							  result_relation,
 							  target_relation);
+	if (parse->groupingSets)
+		add_gsetid_tlist(tlist);
 
 	if (target_relation)
 		table_close(target_relation, NoLock);
@@ -414,6 +417,31 @@ expand_targetlist(List *tlist, int command_type,
 	}
 
 	return new_tlist;
+}
+
+static List *
+add_gsetid_tlist(List *tlist)
+{
+	TargetEntry *tle;
+	GroupingSetId *gsetid;
+
+	if (list_length(tlist) >= 1)
+	{
+		TargetEntry *te1;
+		te1 = get_tle_by_resno(tlist, list_length(tlist));
+
+		Assert (te1->expr != NULL);
+		if (IsA(te1->expr, GroupingSetId))
+			return tlist;
+	}
+
+	gsetid = makeNode(GroupingSetId);
+	tle = makeTargetEntry((Expr *)gsetid, list_length(tlist) + 1,
+			"gset_id", true);
+	tle->ressortgroupref = assignSortGroupRef(tle, tlist);
+	tlist = lappend(tlist, tle);
+
+	return tlist;
 }
 
 

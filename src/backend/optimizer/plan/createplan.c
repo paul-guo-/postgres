@@ -288,8 +288,6 @@ static ModifyTable *make_modifytable(PlannerInfo *root,
 static GatherMerge *create_gather_merge_plan(PlannerInfo *root,
 						 GatherMergePath *best_path);
 
-static List *add_gsetid_tlist(List *tlist);
-
 
 /*
  * create_plan
@@ -747,31 +745,6 @@ create_scan_plan(PlannerInfo *root, Path *best_path, int flags)
 		plan = create_gating_plan(root, best_path, plan, gating_clauses);
 
 	return plan;
-}
-
-static List *
-add_gsetid_tlist(List *tlist)
-{
-	TargetEntry *tle;
-	GroupingSetId *gsetid;
-
-	if (list_length(tlist) >= 1)
-	{
-		TargetEntry *te1;
-		te1 = get_tle_by_resno(tlist, list_length(tlist));
-
-		Assert (te1->expr != NULL);
-		if (IsA(te1->expr, GroupingSetId))
-			return tlist;
-	}
-
-	gsetid = makeNode(GroupingSetId);
-	tle = makeTargetEntry((Expr *)gsetid, list_length(tlist) + 1,
-			"gset_id", true);
-	tle->ressortgroupref = assignSortGroupRef(tle, tlist);
-	tlist = lappend(tlist, tle);
-
-	return tlist;
 }
 
 /*
@@ -1729,11 +1702,6 @@ create_gather_merge_plan(PlannerInfo *root, GatherMergePath *best_path)
 	List	   *pathkeys = best_path->path.pathkeys;
 	List	   *tlist = build_path_tlist(root, &best_path->path);
 
-	/*
-	 * WIP: parallel grouping sets
-	 */
-	tlist = add_gsetid_tlist(tlist);
-
 	/* As with Gather, it's best to project away columns in the workers. */
 	subplan = create_plan_recurse(root, best_path->subpath, CP_EXACT_TLIST);
 
@@ -2273,9 +2241,6 @@ create_groupingsets_plan(PlannerInfo *root, GroupingSetsPath *best_path)
 		numGroupCols = list_length((List *) linitial(rollup->gsets));
 
 		tlist = build_path_tlist(root, &best_path->path);
-		if (best_path->aggsplit == AGGSPLIT_INITIAL_SERIAL)
-			tlist = add_gsetid_tlist(tlist);
-
 		plan = make_agg(tlist,
 						best_path->qual,
 						best_path->aggstrategy,

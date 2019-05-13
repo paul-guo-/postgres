@@ -6513,7 +6513,7 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 				 * Insert a Sort node, if required.  But there's no point in
 				 * sorting anything but the cheapest path.
 				 */
-				if (!pathkeys_contained_in(root->group_pathkeys, path->pathkeys))
+				if (!pathkeys_contained_in(root->group_pathkeys, path->pathkeys) && !parse->groupingSets)
 				{
 					if (path != partially_grouped_rel->cheapest_total_path)
 						continue;
@@ -6572,7 +6572,7 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 											 target,//grouped_rel->reltarget,
 											 parse->groupClause ? AGG_SORTED : AGG_PLAIN,
 											 AGGSPLIT_FINAL_DESERIAL,
-											 groupClause, //
+											 groupClause,
 											 havingQual,
 											 agg_final_costs,
 											 dNumGroups));

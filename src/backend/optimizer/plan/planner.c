@@ -6524,7 +6524,6 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 													 -1.0);
 				}
 
-#if 0
 				if (parse->groupingSets)
 				{
 					PathTarget *target;
@@ -6578,8 +6577,7 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 											 agg_final_costs,
 											 dNumGroups));
 				}
-#endif
-				if (parse->hasAggs)
+				else if (parse->hasAggs)
 					add_path(grouped_rel, (Path *)
 							 create_agg_path(root,
 											 grouped_rel,

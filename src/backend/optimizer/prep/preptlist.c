@@ -234,9 +234,10 @@ preprocess_targetlist(PlannerInfo *root)
 							  CMD_UPDATE,
 							  result_relation,
 							  target_relation);
+#if 0
 	if (parse->groupingSets)
 		add_gsetid_tlist(tlist);
-
+#endif
 	if (target_relation)
 		table_close(target_relation, NoLock);
 

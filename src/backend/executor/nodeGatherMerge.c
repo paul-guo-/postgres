@@ -271,7 +271,7 @@ ExecGatherMerge(PlanState *pstate)
 	/* If no projection is required, we're done. */
 	if (node->ps.ps_ProjInfo == NULL)
 	{
-		elog(WARNING,"pid %d,       gather_merge: %d\t%d\t%d\t%d", getpid(),
+		elog(WARNING,"								pid %d, gather_merge: %d\t%d\t%d\t%d", getpid(),
 				DatumGetInt32(slot->tts_values[0]),
 				DatumGetInt32(slot->tts_values[1]),
 				DatumGetInt32(slot->tts_values[2]),

@@ -178,7 +178,7 @@ static void consider_groupingsets_paths(PlannerInfo *root,
 							grouping_sets_data *gd,
 							const AggClauseCosts *agg_costs,
 							double dNumGroups,
-							bool partial,
+							bool is_partial,
 							AggSplit aggsplit);
 static RelOptInfo *create_window_paths(PlannerInfo *root,
 					RelOptInfo *input_rel,
@@ -4186,7 +4186,7 @@ consider_groupingsets_paths(PlannerInfo *root,
 							grouping_sets_data *gd,
 							const AggClauseCosts *agg_costs,
 							double dNumGroups,
-							bool partial,
+							bool is_partial,
 							AggSplit aggsplit)
 {
 	Query	   *parse = root->parse;
@@ -4343,7 +4343,7 @@ consider_groupingsets_paths(PlannerInfo *root,
 			strat = AGG_MIXED;
 		}
 
-		if (partial)
+		if (is_partial)
 			add_partial_path(grouped_rel, (Path *)
 					 create_groupingsets_path(root,
 											  grouped_rel,
@@ -4513,7 +4513,7 @@ consider_groupingsets_paths(PlannerInfo *root,
 
 		if (rollups)
 		{
-			if (partial)
+			if (is_partial)
 				add_partial_path(grouped_rel, (Path *)
 						 create_groupingsets_path(root,
 												  grouped_rel,
@@ -4543,7 +4543,7 @@ consider_groupingsets_paths(PlannerInfo *root,
 	 */
 	if (!gd->unsortable_sets)
 	{
-		if (partial)
+		if (is_partial)
 			add_partial_path(grouped_rel, (Path *)
 					 create_groupingsets_path(root,
 											  grouped_rel,
@@ -6527,9 +6527,16 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 #if 0
 				if (parse->groupingSets)
 				{
+					PathTarget *target;
+					int SortGroupRef;
+
+					target = grouped_rel->reltarget;
 					groupClause = parse->groupClause;
+
 					if (parse->groupClause)
 					{
+						SortGroupRef = assgin_sortgroup_ref_pathtarget(target);
+
 						get_sort_group_operators(INT4OID,
 												   false, true, false,
 												   &sortop, &eqop, NULL,
@@ -6537,16 +6544,18 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 
 						/* some are hardcoded for testing, modify them! */
 						sc = makeNode(SortGroupClause);
-						groupClause = copyObject(parse->groupClause);
-						sc->tleSortGroupRef = 3;
+						sc->tleSortGroupRef = SortGroupRef;
 						sc->eqop = eqop;
 						sc->sortop = sortop;
 						sc->nulls_first = false;
 						sc->hashable = hashable;
 						
-						groupClause = copyObject(parse->groupClause),
+						groupClause = copyObject(parse->groupClause);
 						groupClause = lappend(groupClause, sc);
+
+						target = add_groupingset_id_path_target(root, target, SortGroupRef);
 					}
+
 
 					/*
 					 * need to create grouping set path since there might be multiple rollups.
@@ -6561,7 +6570,7 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 							 create_agg_path(root,
 											 grouped_rel,
 											 path,
-											 grouped_rel->reltarget,
+											 target,//grouped_rel->reltarget,
 											 parse->groupClause ? AGG_SORTED : AGG_PLAIN,
 											 AGGSPLIT_FINAL_DESERIAL,
 											 groupClause, //
@@ -7005,14 +7014,6 @@ create_partial_grouping_paths(PlannerInfo *root,
 
 	return partially_grouped_rel;
 }
-extern PathKey *
-make_pathkey_from_sortop(PlannerInfo *root,
-						 Expr *expr,
-						 Relids nullable_relids,
-						 Oid ordering_op,
-						 bool nulls_first,
-						 Index sortref,
-						 bool create_it);
 
 /*
  * Generate Gather and Gather Merge paths for a grouping relation or partial
@@ -7031,49 +7032,48 @@ static void
 gather_grouping_paths(PlannerInfo *root, RelOptInfo *rel)
 {
 	Path	   *cheapest_partial_path;
+	bool		is_groupingset_path;
 
 	/* Try Gather for unordered paths and Gather Merge for ordered ones. */
+	if (0) /* TODO : Change following the code change below (adding target/pathkeys). */
 	generate_gather_paths(root, rel, true);
 
 	/* Try cheapest partial path + explicit Sort + Gather Merge. */
 	cheapest_partial_path = linitial(rel->partial_pathlist);
+	is_groupingset_path = IsA(cheapest_partial_path, GroupingSetsPath);
+
 	if (!pathkeys_contained_in(root->group_pathkeys,
-							   cheapest_partial_path->pathkeys))
+							   cheapest_partial_path->pathkeys) || is_groupingset_path)
 	{
 		Path	   *path;
 		double		total_groups;
+		List	   *pathkeys;
+		PathTarget *path_target;
+		int		  	SortGroupRef;
 
-/*      TODO:  gather merge need to add group id into pathkeys.
- *
-		Oid sortop;
-		Var *sortkey;
-		PathKey *pathkey;
-		List *pathkeys;
+		if (is_groupingset_path)
+		{
+			SortGroupRef = assgin_sortgroup_ref_pathtarget(rel->reltarget);
+			pathkeys = add_groupingset_id_pathkeys(root, root->group_pathkeys, SortGroupRef);
+			path_target = add_groupingset_id_path_target(root, rel->reltarget, SortGroupRef);
+		}
+		else
+		{
+			path_target = rel->reltarget;
+			pathkeys = root->group_pathkeys;
+		}
 
-  		get_sort_group_operators(INT4OID, false, true, false, &sortop, NULL, NULL, NULL);
-		sortkey = makeVar(1, 4, INT4OID, -1, InvalidOid, 0);
-		pathkey = make_pathkey_from_sortop(root,
-										   sortkey,
-										   root->nullable_baserels,
-										   sortop,
-										   false,
-										   3,
-										   true);
-		pathkeys = lappend(pathkey, root->group_pathkeys);
-*/
 		total_groups =
 			cheapest_partial_path->rows * cheapest_partial_path->parallel_workers;
 		path = (Path *) create_sort_path(root, rel, cheapest_partial_path,
-										 root->group_pathkeys,
-										 //pathkeys,
+										 pathkeys,
 										 -1.0);
 		path = (Path *)
 			create_gather_merge_path(root,
 									 rel,
 									 path,
-									 rel->reltarget,
-									 root->group_pathkeys,
-									 //pathkeys,
+									 path_target,
+									 pathkeys,
 									 NULL,
 									 &total_groups);
 
@@ -7100,13 +7100,6 @@ can_partial_agg(PlannerInfo *root, const AggClauseCosts *agg_costs)
 		 */
 		return false;
 	}
-#if 0
-	else if (parse->groupingSets)
-	{
-		/* We don't know how to do grouping sets in parallel. */
-		return false;
-	}
-#endif
 	else if (agg_costs->hasNonPartial || agg_costs->hasNonSerial)
 	{
 		/* Insufficient support for partial mode. */

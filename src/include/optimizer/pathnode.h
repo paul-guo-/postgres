@@ -212,6 +212,12 @@ extern AggPath *create_agg_path(PlannerInfo *root,
 				List *qual,
 				const AggClauseCosts *aggcosts,
 				double numGroups);
+extern Index
+assgin_sortgroup_ref_pathtarget(PathTarget *target);
+extern List *
+add_groupingset_id_pathkeys(PlannerInfo *root, List *pathkeys, int SortGroupRef);
+extern PathTarget *
+add_groupingset_id_path_target(PlannerInfo *root, PathTarget *target_old, int SortGroupRef);
 extern GroupingSetsPath *create_groupingsets_path(PlannerInfo *root,
 						 RelOptInfo *rel,
 						 Path *subpath,

@@ -181,6 +181,14 @@ typedef enum
 	PATHKEYS_DIFFERENT			/* neither pathkey includes the other */
 } PathKeysComparison;
 
+extern PathKey *
+make_pathkey_from_sortop(PlannerInfo *root,
+					Expr *expr,
+					Relids nullable_relids,
+					Oid ordering_op,
+					bool nulls_first,
+					Index sortref,
+					bool create_it);
 extern PathKeysComparison compare_pathkeys(List *keys1, List *keys2);
 extern bool pathkeys_contained_in(List *keys1, List *keys2);
 extern Path *get_cheapest_path_for_pathkeys(List *paths, List *pathkeys,

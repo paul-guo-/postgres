@@ -288,7 +288,6 @@ static ModifyTable *make_modifytable(PlannerInfo *root,
 static GatherMerge *create_gather_merge_plan(PlannerInfo *root,
 						 GatherMergePath *best_path);
 
-
 /*
  * create_plan
  *	  Creates the access plan for a query by recursively processing the

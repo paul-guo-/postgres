@@ -16,6 +16,7 @@
 
 #include <math.h>
 
+#include "catalog/pg_type.h"
 #include "miscadmin.h"
 #include "foreign/fdwapi.h"
 #include "nodes/extensible.h"
@@ -31,6 +32,7 @@
 #include "optimizer/restrictinfo.h"
 #include "optimizer/tlist.h"
 #include "parser/parsetree.h"
+#include "parser/parse_oper.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/selfuncs.h"
@@ -2992,6 +2994,73 @@ create_agg_path(PlannerInfo *root,
 	return pathnode;
 }
 
+Index
+assgin_sortgroup_ref_pathtarget(PathTarget *target)
+{
+	int i, maxRef;
+
+	maxRef = 0;
+	for (i = 0; i < list_length(target->exprs); i++)
+	{
+		Index       ref = target->sortgrouprefs[i];
+
+		if (ref > maxRef)
+			maxRef = ref;
+	}
+
+	maxRef++;
+
+	return maxRef;
+}
+
+List *
+add_groupingset_id_pathkeys(PlannerInfo *root, List *pathkeys, int SortGroupRef)
+{
+	Oid				sortop;
+	Oid				eqop;
+	bool			hashable;
+	PathKey		   *pathkey;
+	GroupingSetId  *gsi;
+
+	/* REMOVE the line: Why not use make_pathkeys_for_sortclauses() because it uses root->processed_tlist */
+
+	gsi = makeNode(GroupingSetId);
+
+	get_sort_group_operators(INT4OID, true, true, false,
+							 &sortop, &eqop, NULL,
+							 &hashable);
+
+	pathkey = make_pathkey_from_sortop(root, (Expr *)gsi, NULL, sortop,
+									   false, SortGroupRef, true);
+
+	return lappend(copyObject(pathkeys), pathkey);
+}
+
+PathTarget *
+add_groupingset_id_path_target(PlannerInfo *root, PathTarget *target_old, int SortGroupRef)
+{
+	int				nexprs;
+	PathTarget	   *path_target;
+	GroupingSetId  *gsi;
+
+	gsi = makeNode(GroupingSetId);
+
+	/* Generate new path_target */
+	path_target = makeNode(PathTarget);
+
+	path_target->exprs = copyObject(target_old->exprs);
+	nexprs = list_length(path_target->exprs);
+
+	path_target->sortgrouprefs = (Index *) palloc((nexprs + 1) * sizeof(Index));
+	memcpy(path_target->sortgrouprefs, target_old->sortgrouprefs, nexprs * sizeof(Index));
+	path_target->sortgrouprefs[nexprs] = SortGroupRef;
+
+	path_target->exprs = lappend(path_target->exprs, gsi);
+	/* TODO: Modify cost & width */
+
+	return path_target;
+}
+
 /*
  * create_groupingsets_path
  *	  Creates a pathnode that represents performing GROUPING SETS aggregation
@@ -3028,6 +3097,15 @@ create_groupingsets_path(PlannerInfo *root,
 	/* The topmost generated Plan node will be an Agg */
 	pathnode->path.pathtype = T_Agg;
 	pathnode->path.parent = rel;
+
+	if (aggsplit == AGGSPLIT_INITIAL_SERIAL)
+	{
+		int SortGroupRef;
+
+		SortGroupRef = assgin_sortgroup_ref_pathtarget(target);
+		target = add_groupingset_id_path_target(root, target, SortGroupRef);
+	}
+
 	pathnode->path.pathtarget = target;
 	pathnode->path.param_info = subpath->param_info;
 	pathnode->path.parallel_aware = false;

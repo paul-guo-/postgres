@@ -6655,22 +6655,33 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 		{
 			Path	   *path = partially_grouped_rel->cheapest_total_path;
 
-			hashaggtablesize = estimate_hashagg_tablesize(path,
-														  agg_final_costs,
-														  dNumGroups);
+			if (parse->groupingSets)
+			{
+				consider_groupingsets_paths(root, grouped_rel,
+											path,
+											false, true, gd,
+											agg_final_costs, dNumGroups,
+											false, AGGSPLIT_FINAL_DESERIAL);
+			}
+			else
+			{
+				hashaggtablesize = estimate_hashagg_tablesize(path,
+															  agg_final_costs,
+															  dNumGroups);
 
-			if (hashaggtablesize < work_mem * 1024L)
-				add_path(grouped_rel, (Path *)
-						 create_agg_path(root,
-										 grouped_rel,
-										 path,
-										 grouped_rel->reltarget,
-										 AGG_HASHED,
-										 AGGSPLIT_FINAL_DESERIAL,
-										 parse->groupClause,
-										 havingQual,
-										 agg_final_costs,
-										 dNumGroups));
+				if (hashaggtablesize < work_mem * 1024L)
+					add_path(grouped_rel, (Path *)
+							 create_agg_path(root,
+											 grouped_rel,
+											 path,
+											 grouped_rel->reltarget,
+											 AGG_HASHED,
+											 AGGSPLIT_FINAL_DESERIAL,
+											 parse->groupClause,
+											 havingQual,
+											 agg_final_costs,
+											 dNumGroups));
+			}
 		}
 	}
 
@@ -6894,7 +6905,6 @@ create_partial_grouping_paths(PlannerInfo *root,
 													 root->group_pathkeys,
 													 -1.0);
 
-				/* WIP: parallel grouping sets */
 				if (parse->groupingSets)
 				{
 					consider_groupingsets_paths(root, partially_grouped_rel,
@@ -6932,29 +6942,40 @@ create_partial_grouping_paths(PlannerInfo *root,
 		/* Checked above */
 		Assert(parse->hasAggs || parse->groupClause);
 
-		hashaggtablesize =
-			estimate_hashagg_tablesize(cheapest_total_path,
-									   agg_partial_costs,
-									   dNumPartialGroups);
-
-		/*
-		 * Tentatively produce a partial HashAgg Path, depending on if it
-		 * looks as if the hash table will fit in work_mem.
-		 */
-		if (hashaggtablesize < work_mem * 1024L &&
-			cheapest_total_path != NULL)
+		if (parse->groupingSets)
 		{
-			add_path(partially_grouped_rel, (Path *)
-					 create_agg_path(root,
-									 partially_grouped_rel,
-									 cheapest_total_path,
-									 partially_grouped_rel->reltarget,
-									 AGG_HASHED,
-									 AGGSPLIT_INITIAL_SERIAL,
-									 parse->groupClause,
-									 NIL,
-									 agg_partial_costs,
-									 dNumPartialGroups));
+			consider_groupingsets_paths(root, partially_grouped_rel,
+										cheapest_total_path,
+										false, true, gd,
+										agg_partial_costs, dNumPartialGroups,
+										false, AGGSPLIT_INITIAL_SERIAL);
+		}
+		else
+		{
+			hashaggtablesize =
+				estimate_hashagg_tablesize(cheapest_total_path,
+										   agg_partial_costs,
+										   dNumPartialGroups);
+
+			/*
+			 * Tentatively produce a partial HashAgg Path, depending on if it
+			 * looks as if the hash table will fit in work_mem.
+			 */
+			if (hashaggtablesize < work_mem * 1024L &&
+				cheapest_total_path != NULL)
+			{
+				add_path(partially_grouped_rel, (Path *)
+						 create_agg_path(root,
+										 partially_grouped_rel,
+										 cheapest_total_path,
+										 partially_grouped_rel->reltarget,
+										 AGG_HASHED,
+										 AGGSPLIT_INITIAL_SERIAL,
+										 parse->groupClause,
+										 NIL,
+										 agg_partial_costs,
+										 dNumPartialGroups));
+			}
 		}
 	}
 

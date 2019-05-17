@@ -1883,8 +1883,7 @@ agg_retrieve_direct(AggState *aggstate)
 		Assert(aggstate->projected_set >= 0);
 
 		currentSet = aggstate->projected_set;
-		/* TODO: Set groupingset_id correctly for MixAgg. */
-		econtext->groupingset_id = currentSet;
+		econtext->groupingset_id = currentSet + aggstate->num_hashes;
 
 		prepare_projection_slot(aggstate, econtext->ecxt_outertuple, currentSet);
 

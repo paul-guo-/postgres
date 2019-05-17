@@ -2689,6 +2689,10 @@ generate_gather_paths(PlannerInfo *root, RelOptInfo *rel, bool override_rows)
 	ListCell   *lc;
 	double		rows;
 	double	   *rowsp = NULL;
+	bool		is_groupingset_path;
+	List	   *pathkeys;
+	PathTarget *path_target;
+	int		  	SortGroupRef;
 
 	/* If there are no partial paths, there's nothing to do here. */
 	if (rel->partial_pathlist == NIL)
@@ -2704,10 +2708,18 @@ generate_gather_paths(PlannerInfo *root, RelOptInfo *rel, bool override_rows)
 	 * of partial_pathlist because of the way add_partial_path works.
 	 */
 	cheapest_partial_path = linitial(rel->partial_pathlist);
+	is_groupingset_path = IsA(cheapest_partial_path, GroupingSetsPath);
+	if (is_groupingset_path)
+	{
+		SortGroupRef = assgin_sortgroup_ref_pathtarget(rel->reltarget);
+		path_target = add_groupingset_id_path_target(root, rel->reltarget, SortGroupRef);
+	}
+	else
+		path_target = rel->reltarget;
 	rows =
 		cheapest_partial_path->rows * cheapest_partial_path->parallel_workers;
 	simple_gather_path = (Path *)
-		create_gather_path(root, rel, cheapest_partial_path, rel->reltarget,
+		create_gather_path(root, rel, cheapest_partial_path, path_target,
 						   NULL, rowsp);
 	add_path(rel, simple_gather_path);
 
@@ -2723,9 +2735,22 @@ generate_gather_paths(PlannerInfo *root, RelOptInfo *rel, bool override_rows)
 		if (subpath->pathkeys == NIL)
 			continue;
 
+		is_groupingset_path = IsA(subpath, GroupingSetsPath);
+		if (is_groupingset_path)
+		{
+			SortGroupRef = assgin_sortgroup_ref_pathtarget(rel->reltarget);
+			pathkeys = add_groupingset_id_pathkeys(root, root->group_pathkeys, SortGroupRef);
+			path_target = add_groupingset_id_path_target(root, rel->reltarget, SortGroupRef);
+		}
+		else
+		{
+			pathkeys = root->group_pathkeys;
+			path_target = rel->reltarget;
+		}
+
 		rows = subpath->rows * subpath->parallel_workers;
-		path = create_gather_merge_path(root, rel, subpath, rel->reltarget,
-										subpath->pathkeys, NULL, rowsp);
+		path = create_gather_merge_path(root, rel, subpath, path_target,
+										pathkeys, NULL, rowsp);
 		add_path(rel, &path->path);
 	}
 }

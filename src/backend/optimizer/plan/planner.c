@@ -3888,6 +3888,34 @@ create_grouping_paths(PlannerInfo *root,
 		create_ordinary_grouping_paths(root, input_rel, grouped_rel,
 									   agg_costs, gd, &extra,
 									   &partially_grouped_rel);
+#if 0
+		append_pathlist = NIL;
+		 foreach(lc, gd->rollups)
+		 {
+		 	RollupData *rollup = lfirst(lc);
+
+			rollup_gd = palloc0(sizeof(grouping_sets_data));
+			memcpy(rolup_gd, gd, sizeof(grouping_sets_data));
+			rollup_gd->rollups = list_make1(rollup);
+			rollup_gd->any_hashable = rollup_gd->hashable;
+
+
+			create_ordinary_grouping_paths(root, input_rel, rollup_grouped_rel,
+										   agg_costs, rollup_gd, &extra,
+										   &partially_rollup_grouped_rel);
+			append_pathlist = lappend(append_pathlist, input_rel->cheapest_total_path);
+		 }
+		 add_path(grouped_rel, create_append_path(append_pathlist));
+
+create_append_path(PlannerInfo *root,
+				   RelOptInfo *rel,
+				   List *subpaths, List *partial_subpaths,
+				   List *pathkeys, Relids required_outer,
+				   int parallel_workers, bool parallel_aware,
+				   List *partitioned_rels, double rows)
+
+		 */
+#endif
 	}
 
 	set_cheapest(grouped_rel);
@@ -6513,7 +6541,8 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 				 * Insert a Sort node, if required.  But there's no point in
 				 * sorting anything but the cheapest path.
 				 */
-				if (!pathkeys_contained_in(root->group_pathkeys, path->pathkeys) && !parse->groupingSets)
+				if (!pathkeys_contained_in(root->group_pathkeys, path->pathkeys) &&
+					!(parse->groupingSets && !IsA(path, GatherMergePath)))
 				{
 					if (path != partially_grouped_rel->cheapest_total_path)
 						continue;
@@ -7054,15 +7083,15 @@ gather_grouping_paths(PlannerInfo *root, RelOptInfo *rel)
 	bool		is_groupingset_path;
 
 	/* Try Gather for unordered paths and Gather Merge for ordered ones. */
-	if (0) /* TODO : Change following the code change below (adding target/pathkeys). */
 	generate_gather_paths(root, rel, true);
 
 	/* Try cheapest partial path + explicit Sort + Gather Merge. */
 	cheapest_partial_path = linitial(rel->partial_pathlist);
 	is_groupingset_path = IsA(cheapest_partial_path, GroupingSetsPath);
 
+	/* FIXME: some places compare using root->group_pathkeys which does not have gset_id so comparision is buggy. */
 	if (!pathkeys_contained_in(root->group_pathkeys,
-							   cheapest_partial_path->pathkeys) || is_groupingset_path)
+							   cheapest_partial_path->pathkeys))
 	{
 		Path	   *path;
 		double		total_groups;
@@ -7072,6 +7101,7 @@ gather_grouping_paths(PlannerInfo *root, RelOptInfo *rel)
 
 		if (is_groupingset_path)
 		{
+			/* e.g. hash agg */
 			SortGroupRef = assgin_sortgroup_ref_pathtarget(rel->reltarget);
 			pathkeys = add_groupingset_id_pathkeys(root, root->group_pathkeys, SortGroupRef);
 			path_target = add_groupingset_id_path_target(root, rel->reltarget, SortGroupRef);

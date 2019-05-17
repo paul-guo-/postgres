@@ -3033,7 +3033,7 @@ add_groupingset_id_pathkeys(PlannerInfo *root, List *pathkeys, int SortGroupRef)
 	pathkey = make_pathkey_from_sortop(root, (Expr *)gsi, NULL, sortop,
 									   false, SortGroupRef, true);
 
-	return lappend(copyObject(pathkeys), pathkey);
+	return lappend(pathkeys, pathkey);
 }
 
 PathTarget *

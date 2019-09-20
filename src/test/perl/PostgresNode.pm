@@ -593,6 +593,32 @@ sub backup_fs_cold
 	return;
 }
 
+sub _srcsymlink
+{
+	my ($srcpath, $destpath) = @_;
+
+	croak "Cannot operate on symlink \"$srcpath\""
+		if ($srcpath !~ qr{/(pg_tblspc/[0-9]+)$});
+
+	# We have mapped tablespaces. Copy them individually
+	my $tmpdir = TestLib::tempdir;
+	my $dstrealdir = TestLib::perl2host($tmpdir);
+	my $srcrealdir = readlink($srcpath);
+
+	opendir(my $dh, $srcrealdir);
+	while (my $entry = (readdir $dh))
+	{
+		next if ($entry eq '.' or $entry eq '..');
+		my $spath = "$srcrealdir/$entry";
+		my $dpath = "$dstrealdir/$entry";
+		RecursiveCopy::copypath($spath, $dpath);
+	}
+	closedir $dh;
+
+	symlink $dstrealdir, $destpath;
+
+	return 1;
+}
 
 # Common sub of backup_fs_hot and backup_fs_cold
 sub _backup_fs
@@ -680,7 +706,8 @@ sub init_from_backup
 
 	my $data_path = $self->data_dir;
 	rmdir($data_path);
-	RecursiveCopy::copypath($backup_path, $data_path);
+	RecursiveCopy::copypath($backup_path, $data_path,
+							srcsymlinkfn => \&_srcsymlink);
 	chmod(0700, $data_path);
 
 	# Base configuration for this node

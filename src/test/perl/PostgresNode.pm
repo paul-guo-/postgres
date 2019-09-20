@@ -558,6 +558,15 @@ sub backup
 	my ($self, $backup_name, %params) = @_;
 	my $backup_path = $self->backup_dir . '/' . $backup_name;
 	my $name        = $self->name;
+	my @tablespace_options = ();
+
+	if (defined $params{tablespace_mappings})
+	{
+		my @ts_mappings = split(/,/, $params{tablespace_mappings});
+		foreach my $elem (@ts_mappings) {
+			push(@tablespace_options, '--tablespace-mapping='.$elem);
+		}
+	}
 
 	local %ENV = $self->_get_env();
 
@@ -566,7 +575,8 @@ sub backup
 		'pg_basebackup', '-D', $backup_path, '-h',
 		$self->host,     '-p', $self->port,  '--checkpoint',
 		'fast',          '--no-sync',
-		@{ $params{backup_options} });
+		@{ $params{backup_options} },
+		@tablespace_options);
 	print "# Backup finished\n";
 	return;
 }
@@ -1888,15 +1898,26 @@ Returns 1 if successful, 0 if timed out.
 
 sub poll_query_until
 {
-	my ($self, $dbname, $query, $expected) = @_;
+	my ($self, $dbname, $query, $params) = @_;
+	my $expected;
+
+	# Be backwards-compatible
+	if (defined $params and ref $params eq '')
+	{
+		$params = {
+			expected => $params,
+			timeout => 180
+		};
+	}
 
 	local %ENV = $self->_get_env();
 
-	$expected = 't' unless defined($expected);    # default value
+	$params->{expected} = 't' unless defined($params->{expected});
+	$params->{timeout} = 180 unless defined($params->{timeout});
 
 	my $cmd = [ 'psql', '-XAt', '-c', $query, '-d', $self->connstr($dbname) ];
 	my ($stdout, $stderr);
-	my $max_attempts = 180 * 10;
+	my $max_attempts = $params->{timeout} * 10;
 	my $attempts     = 0;
 
 	while ($attempts < $max_attempts)
@@ -1906,7 +1927,7 @@ sub poll_query_until
 		$stdout =~ s/\r\n/\n/g if $Config{osname} eq 'msys';
 		chomp($stdout);
 
-		if ($stdout eq $expected)
+		if ($stdout eq $params->{expected})
 		{
 			return 1;
 		}
@@ -1924,7 +1945,7 @@ sub poll_query_until
 	diag qq(poll_query_until timed out executing this query:
 $query
 expecting this output:
-$expected
+$params->{expected}
 last actual query output:
 $stdout
 with stderr:

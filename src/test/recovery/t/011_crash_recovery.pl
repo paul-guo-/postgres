@@ -134,7 +134,7 @@ $node_master->wait_for_catchup($node_standby, 'replay',
 $node_standby->safe_psql('postgres', 'CHECKPOINT');
 
 # Do immediate shutdown just after a sequence of CREAT DATABASE / DROP
-# DATABASE / DROP TABLESPACE. This causes CREATE DATBASE WAL records
+# DATABASE / DROP TABLESPACE. This causes CREATE DATABASE WAL records
 # to be applied to already-removed directories.
 $node_master->safe_psql('postgres',
 						q[CREATE DATABASE dropme_db1 WITH TABLESPACE dropme_ts1;

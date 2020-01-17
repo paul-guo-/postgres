@@ -611,7 +611,7 @@ intorel_receive(TupleTableSlot *slot, DestReceiver *self)
 {
 	DR_intorel		*myState = (DR_intorel *) self;
 	TupleTableSlot  *batchslot;
-	HeapTuple		 tuple;
+	int				 tup_len;
 
 	if (myState->mi_slots[myState->mi_slots_num] == NULL)
 	{
@@ -621,11 +621,20 @@ intorel_receive(TupleTableSlot *slot, DestReceiver *self)
 	else
 		batchslot = myState->mi_slots[myState->mi_slots_num];
 
+	tup_len = MemoryContextUsedSize(batchslot->tts_mcxt);
+	//elog(WARNING, "  1st is %d", tup_len);
+
+
 	ExecCopySlot(batchslot, slot);
-	tuple = ExecFetchSlotHeapTuple(batchslot, true, NULL);
+	//elog(WARNING, "  2nd 1 is %d", MemoryContextUsedSize(batchslot->tts_mcxt));
+	ExecMaterializeSlot(batchslot);
+
+	//elog(WARNING, "  2nd 2 is %d", MemoryContextUsedSize(batchslot->tts_mcxt));
+	tup_len = MemoryContextUsedSize(batchslot->tts_mcxt) - tup_len;
+	//elog(WARNING, "2nd diff is %d", tup_len);
 
 	myState->mi_slots_num++;
-	myState->mi_slots_size += tuple->t_len;
+	myState->mi_slots_size += tup_len;
 
 	if (myState->mi_slots_num >= MAX_MULTI_INSERT_TUPLE_NUM ||
 		myState->mi_slots_size >= MAX_MULTI_INSERT_TUPLE_SIZES)

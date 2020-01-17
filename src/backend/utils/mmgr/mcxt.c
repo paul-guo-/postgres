@@ -632,6 +632,17 @@ MemoryContextStatsPrint(MemoryContext context, void *passthru,
 	fputc('\n', stderr);
 }
 
+int
+MemoryContextUsedSize(MemoryContext context)
+{
+	MemoryContextCounters total;
+
+	memset(&total, 0, sizeof(total));
+	context->methods->stats(context, NULL, NULL, &total);
+
+	return total.totalspace - total.freespace;
+}
+
 /*
  * MemoryContextCheck
  *		Check all chunks in the named context.

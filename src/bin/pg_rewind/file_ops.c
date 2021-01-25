@@ -84,6 +84,39 @@ close_target_file(void)
 	dstfd = -1;
 }
 
+#ifdef HAVE_COPY_FILE_RANGE
+void
+copy_target_range(int srcfd, off_t begin, size_t size)
+{
+	ssize_t     copylen;
+
+	/* update progress report */
+	fetch_done += size;
+	progress_report(false);
+
+	if (dry_run)
+		return;
+
+	if (lseek(srcfd, begin, SEEK_SET) == -1)
+		pg_fatal("could not seek in source file: %m");
+
+	if (lseek(dstfd, begin, SEEK_SET) == -1)
+		pg_fatal("could not seek in target file \"%s\": %m", dstpath);
+
+	while (size > 0)
+	{
+		copylen = copy_file_range(srcfd, NULL, dstfd, NULL, size, 0);
+
+		if (copylen < 0)
+			pg_fatal("could not copy file to \"%s\": %m", dstpath);
+		else if (copylen == 0)
+			pg_fatal("unexpected EOF while copying to file \"%s\"", dstpath);
+
+		size -= copylen;
+	}
+}
+#endif
+
 void
 write_target_range(char *buf, off_t begin, size_t size)
 {
